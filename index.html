@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operative Note Generator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #fafaf8; --surface: #f3f2ee; --border: rgba(0,0,0,0.12);
+    --border-strong: rgba(0,0,0,0.25); --text: #1a1a18; --text-muted: #6b6b67;
+    --text-hint: #9b9b97; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141412; --surface: #1e1e1b; --border: rgba(255,255,255,0.10);
+      --border-strong: rgba(255,255,255,0.22); --text: #f0efe8; --text-muted: #9b9b97; --text-hint: #6b6b67; }
+  }
+  body { font-family: Georgia, serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 0; -webkit-text-size-adjust: 100%; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  header { border-bottom: 2px solid var(--text); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+  header h1 { font-size: 20px; font-weight: normal; }
+  header p { font-family: monospace; font-size: 11px; color: var(--text-muted); margin-top: 4px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .label { font-family: monospace; font-size: 10px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; display: block; }
+  .key-row { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem; }
+  .key-row input { flex: 1; background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; font-family: monospace; font-size: 13px; color: var(--text); outline: none; }
+  .key-row input:focus { border-color: var(--border-strong); }
+  .key-row input::placeholder { color: var(--text-hint); }
+  .key-save { font-family: monospace; font-size: 11px; padding: 8px 14px; background: var(--text); color: var(--bg); border: none; border-radius: var(--radius-sm); cursor: pointer; letter-spacing: 0.05em; white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; }
+  .chip { font-family: monospace; font-size: 11px; padding: 5px 11px; border: 0.5px solid var(--border); border-radius: 20px; cursor: pointer; color: var(--text-muted); background: var(--bg); -webkit-tap-highlight-color: transparent; }
+  .chip:active { background: var(--surface); color: var(--text); }
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+  textarea { width: 100%; background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; font-family: Georgia, serif; font-size: 15px; color: var(--text); resize: vertical; line-height: 1.6; outline: none; -webkit-appearance: none; }
+  textarea:focus { border-color: var(--border-strong); }
+  textarea::placeholder { color: var(--text-hint); font-style: italic; }
+  #procInput { min-height: 90px; }
+  #detailsInput { min-height: 70px; margin-top: 12px; }
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .btn-primary { background: var(--text); color: var(--bg); border: none; border-radius: var(--radius-sm); padding: 12px 24px; font-family: monospace; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .btn-primary:disabled { opacity: 0.35; }
+  .btn-ghost { background: transparent; color: var(--text-muted); border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; font-family: monospace; font-size: 13px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .out-card { border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+  .out-head { background: var(--surface); padding: 10px 1.25rem; border-bottom: 0.5px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .out-head span { font-family: monospace; font-size: 10px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+  .btn-copy { font-family: monospace; font-size: 11px; padding: 5px 13px; border: 0.5px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text-muted); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .out-body { padding: 1.25rem; background: var(--bg); min-height: 100px; }
+  .note-text { font-family: Georgia, serif; font-size: 14px; line-height: 1.85; white-space: pre-wrap; }
+  .cpt-text { font-family: monospace; font-size: 12px; line-height: 1.75; white-space: pre-wrap; }
+  .placeholder { font-family: monospace; font-size: 12px; color: var(--text-hint); font-style: italic; }
+  .loading { display: flex; align-items: center; gap: 10px; }
+  .dots { display: flex; gap: 4px; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); animation: blink 1.2s infinite; }
+  .dot:nth-child(2) { animation-delay: 0.2s; } .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+  .error { font-family: monospace; font-size: 11px; color: #c0392b; margin-top: 8px; }
+  #cptCard { display: none; }
+  footer { margin-top: 2rem; padding-top: 1rem; border-top: 0.5px solid var(--border); font-family: monospace; font-size: 10px; color: var(--text-hint); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Operative Note Generator</h1>
+    <p>Vascular Surgery &mdash; Inpatient Hospital &mdash; Procedure in Detail</p>
+  </header>
+
+  <div class="key-row">
+    <span class="label" style="margin:0;white-space:nowrap">API Key</span>
+    <input type="password" id="apiKey" placeholder="sk-ant-..." />
+    <button class="key-save" onclick="saveKey()">Save</button>
+  </div>
+
+  <span class="label">Quick select</span>
+  <div class="chips" id="chips"></div>
+
+  <div class="card">
+    <span class="label">Procedure name(s)</span>
+    <textarea id="procInput" placeholder="e.g. Right SFA atherectomy with stent angioplasty, complex&#10;Left tibial balloon angioplasty&#10;Aortogram"></textarea>
+    <span class="label" style="margin-top:14px">Additional details (optional)</span>
+    <textarea id="detailsInput" placeholder="e.g. Access from left CFA, crossover to right. 99% stenosis distal SFA. Auryon 2mm laser. Shockwave 6x40mm. Cook Zilver 7x120mm stent."></textarea>
+    <div class="btn-row">
+      <button class="btn-primary" id="genBtn" onclick="generate()">Generate note</button>
+      <button class="btn-ghost" onclick="clearAll()">Clear</button>
+    </div>
+    <div id="errMsg"></div>
+  </div>
+
+  <div class="out-card" id="noteCard">
+    <div class="out-head">
+      <span>Procedure in detail</span>
+      <button class="btn-copy" id="copyNote" onclick="copyText('noteBody','copyNote')">Copy</button>
+    </div>
+    <div class="out-body" id="noteBody">
+      <p class="placeholder">Your drafted procedure note will appear here.</p>
+    </div>
+  </div>
+
+  <div class="out-card" id="cptCard">
+    <div class="out-head">
+      <span>CPT codes &amp; billing notes</span>
+      <button class="btn-copy" id="copyCpt" onclick="copyText('cptBody','copyCpt')">Copy</button>
+    </div>
+    <div class="out-body" id="cptBody"></div>
+  </div>
+
+  <footer>Operative Note Generator &bull; Vascular Surgery &bull; Style-trained on 15 case examples &bull; All [ ] placeholders require surgeon review before signing</footer>
+</div>
+
+<script>
+const PICKS = [
+  "Right SFA atherectomy with stent angioplasty",
+  "Bilateral lower extremity angiogram + aortogram",
+  "Left tibial atherectomy with balloon angioplasty, complex",
+  "EVAR aorto-bi-iliac, percutaneous bilateral access",
+  "TCAR with distal embolic protection",
+  "AV fistula creation, brachiocephalic",
+  "AV fistula revision with balloon angioplasty",
+  "Profunda-tibial bypass with reversed GSV",
+  "Mechanical thrombectomy of bypass graft",
+  "Iliac stent angioplasty with lithotripsy",
+  "Wound debridement with sartorius flap",
+  "Aortobifemoral bypass, redo bilateral groins",
+];
+
+const SYS = `You are a vascular surgery operative note assistant. Your sole job is to write the "Procedure in Detail" section of operative notes for a specific vascular surgeon. You have been trained on 15 of their actual operative notes and must replicate their exact voice, style, and documentation patterns precisely.
+
+CRITICAL STYLE RULES:
+- First person, active voice, past tense throughout
+- Decision language: "I elected to...", "I felt that...", "Considering that...", "I then proceeded to...", "I was able to...", "Despite this..."
+- Result language: "significant improvement in luminal gain", "widely patent with excellent runoff", "robust flow with good collateralization downstream", "repeat angiogram demonstrated significant improvement"
+- Always state clinical rationale BEFORE each decision
+- Always document result AFTER each intervention
+- Always confirm inflow AND outflow before closing
+- Always document bilateral distal signals at case end
+- Document each vessel territory separately using "separate and distinct lesions" language when multiple vessels treated
+- Document deferred interventions with explicit rationale
+- For redo/hostile cases: quantify time, name co-surgeon, state blood products, document ICU disposition with rationale
+
+STANDARD OPENING — ENDOVASCULAR:
+After consent was obtained and the operative site was marked, the patient was brought to the operating room placed in the supine position on the operating table. General anesthesia was induced and preoperative antibiotics were given. The area was prepped and draped in usual sterile fashion and timeout was performed. Ultrasound was used to identify the [SIDE] common femoral artery and it was noted to be patent. Ultrasound was then used to access the artery in the [retrograde/antegrade] direction with a microneedle followed by microwire. I confirmed the tip of the needle to be within the lumen of the artery and there was good backbleeding from it. The microwire was placed into the iliac arteries and a 5 French sheath was then placed. The patient was then systemically heparinized [to an ACT greater than 250].
+
+STANDARD OPENING — OPEN SURGICAL:
+After consent was obtained and the operative site was marked, the patient was brought to the operating room placed in the supine position on the operating table. General anesthesia was induced and preoperative antibiotics were given. The area was prepped and draped in usual sterile fashion and timeout was performed.
+
+STANDARD CLOSING — ENDOVASCULAR:
+At this point in time, no additional intervention was needed. We found the patient to have significant improvement in [dorsalis pedis/posterior tibial/popliteal] signals [and palpable [DP/PT] pulse]. Wire was exchanged over a Bernstein catheter for a Glidewire advantage. The [X]F destination sheath was exchanged for a short [X]F sheath. A Celt closure device was used to close the arteriotomy using ultrasound guidance. This was successfully deployed. Pressure was held to the [right/left] groin. Protamine was given for reversal of heparin. Patient was awakened and extubated without issue and transferred to the PACU in stable condition. All sponge, needle, and instrument counts were correct in the case. I was present and scrubbed for the entire case.
+
+STANDARD CLOSING — OPEN:
+Protamine was given for reversal of heparin. [Hemostatic agents] were used to achieve hemostasis. The wound was irrigated and closed in layered fashion. [Groin: interrupted 2-0 Vicryl in multiple layers, 3-0 Vicryl deep dermal, staples. Lower leg: 2-0 Vicryl fascial/subcutaneous, 3-0 Vicryl deep dermal, staples.] Sterile dressings were applied. Patient was awakened and extubated without issue and transferred to the PACU in stable condition. All sponge, needle, and instrument counts were correct in the case. I was present and scrubbed for the entire case.
+
+DIAGNOSTIC MODULES:
+- Aortogram (75625): Glidewire advantage and Omni catheter were utilized to perform an aortogram of the distal abdominal aorta which was noted to be patent. The bilateral common iliac arteries and external iliac arteries were also patent without significant stenosis. There was runoff into the bilateral common femoral arteries and bilateral profunda arteries. There were no noted flow-limiting lesions here.
+- Unilateral LE angiogram (75710): I then proceeded to perform a [right/left] lower extremity angiogram which demonstrated [findings by vessel from CFA to foot].
+- Bilateral LE angiogram (75716): use when both legs imaged
+- Third-order tibial catheterization (36248): I then placed the catheter at the level of the below-knee popliteal artery where I performed an angiogram of the tibial vessels.
+- US-guided access (76937): always document ultrasound identification, retrograde/antegrade direction, microneedle, microwire, intraluminal confirmation, backbleed
+
+INTERVENTION MODULES:
+LASER ATHERECTOMY: I then proceeded to use an [Orion/Auryon] [1.5/1.7/2.0] mm catheter to perform laser atherectomy throughout the [vessel(s)]. Several passes were made. Post-laser angiogram demonstrated widened luminal gain of the artery. [When multiple vessels: Each vessel had separate and distinct lesions that were being treated.]
+BALLOON ANGIOPLASTY (PTA): Balloon angioplasty was then performed with a [size x length] mm balloon [throughout/at the level of] the [vessel]. There was significant luminal gain achieved [/residual stenosis requiring further intervention].
+INTRAVASCULAR LITHOTRIPSY: I [first/then] used a shockwave [size x length] mm balloon to perform lithotripsy of the [vessel]. There was improvement in luminal gain however there [was/was not] residual stenosis requiring further intervention.
+STENT ANGIOPLASTY: I elected to perform stent angioplasty with a [size x length] mm [brand] stent. This was deployed without issue. I then used a [size] mm balloon to allow the stent to open fully and achieve good wall apposition. Post-intervention angiogram demonstrated significant improvement in luminal gain [throughout/at the level of] the [vessel].
+MECHANICAL THROMBECTOMY: I then proceeded to use a Penumbra device with Bolt technology to perform mechanical thrombectomy from the [vessel(s)]. Several passes were performed. [tPA and nitro were also instilled to help with vasospasm and dissolution of clot.] Post-thrombectomy angiogram demonstrated improved patency [/areas of residual narrowing requiring further intervention].
+CTO CROSSING: I then used a [Berenstein/Kumpe] catheter and a [Hydro ST/stiff Glidewire] to cross the occluded segment. [Escalation to Quick Cross if needed.] I confirmed I was within the true lumen of the [vessel].
+SUBINTIMAL TECHNIQUE: I proceeded to access the [vessel] at the level of the subintimal space and was able to pass a wire down the length of the [vessel]. I then used a Berenstein catheter followed by a stiff Glidewire to reenter the [target vessel] at the level of [location]. I confirmed I was within the true lumen on angiogram and had reentered safely and successfully.
+IVUS (37252/37253): IVUS was performed to evaluate [vessel(s)]. IVUS demonstrated [findings] and confirmed [clinical assessment].
+COIL EMBOLIZATION (37241): I proceeded with performing coil embolization of the [vessel/collateral]. [Coil inventory — list each coil with size x length.] I confirmed with contrast that the [branch/vessel] was completely embolized with no residual flow.
+OPEN BYPASS — ANASTOMOSIS: [Inflow vessel] was clamped proximally and distally and a longitudinal arteriotomy was made with a #11 scalpel and extended with Potts scissors. The [graft/vein conduit] was appropriately beveled and an end-to-side [proximal/distal] anastomosis was performed using running [5-0/6-0/7-0] Prolene suture. Prior to completion the graft was flushed and de-aired and flow was restored.
+ENDARTERECTOMY WITH PATCH: Extensive endarterectomy was performed removing calcified plaque from the [vessel]. Heparinized saline was used to confirm no residual embolic debris. [Tacking suture placed if needed.] Patch angioplasty was then performed using [5-0/6-0] Prolene suture.
+AV FISTULA CREATION (36821): Document ultrasound vein mapping, Garrett dilator size, end-to-side configuration, suture size, thrill confirmed, radial pulse confirmed.
+AV FISTULA REVISION (36902): Document fistulogram findings, outflow tract survey, stenosis location, balloon size, thrill confirmed post-intervention.
+EVAR (34703): Document preclosure Perclose at 10 and 2 o'clock positions, sequential sheath upsizing, renal marking, contralateral gate cannulation with confirmation, hypogastric marking bilateral, each component with exact dimensions, MOB balloon use, completion angiogram with explicit no-endoleak statement.
+TCAR (0075T): Document neck exposure, U-stitch pre-placement, CFV access under ultrasound, flow reversal confirmation on High and Low settings, hemodynamic management for neuroprotection, predilation balloon size and pressure, stent sizing rationale, AP and lateral confirmation, four-extremity neurological assessment at emergence.
+WOUND DEBRIDEMENT/FLAP: Document total area in sq cm AND wound dimensions (L x W x D), tissue layers debrided, cultures taken, irrigation device, topical antibiotics with coverage confirmation, flap ASIS release, complete graft/vessel coverage confirmed, flap viability (reactive to Bovie), wound VAC position, pulse confirmation post-flap.
+
+CPT CODE REFERENCE:
+DIAGNOSTIC: 75625 aortogram, 75710 unilateral LE angiogram, 75716 bilateral LE angiogram, 76937 US-guided access, 37252 IVUS initial vessel, 37253 IVUS additional vessel, 36247/36248 selective catheterization
+ILIAC ZONE: 37220 PTA, 37221 stent, 37222 PTA add'l vessel, 37223 stent add'l vessel, 37262 lithotripsy
+FEM-POP ZONE: 37224 PTA/atherectomy straightforward, 37225 atherectomy+stent straightforward, 37226 stent straightforward, 37227 stent complex, 37278 lithotripsy
+TIBIAL ZONE (1st vessel): 37228 atherectomy, 37229 atherectomy+PTA, 37230 atherectomy+stent, 37231 atherectomy+stent complex; ADD'L VESSEL: 37232, 37233, 37234, 37235; 37279 lithotripsy
+THROMBECTOMY: 37187 mechanical, 37186 secondary thrombolysis (tPA)
+EMBOLIZATION: 37241 venous, 37242 arterial
+AV ACCESS: 36821 fistula creation, 36147 fistulogram, 36902 PTA fistula, 36903 stent fistula, 36907 central dialysis PTA, 37241 collateral embolization
+OPEN: 35646 aortobifemoral bypass, 35256 bypass vein tibial, 35371 CFA endarterectomy, 35390 profunda endarterectomy, 35500 vein harvest, 35700 reoperation femoral bypass >1mo, 35524 venous patch, 34703 EVAR aorto-bi-iliac, 34711 iliac extension, 34713 percutaneous access/closure 10F+, 0075T TCAR, 36821 AV fistula creation
+WOUND: 11043 debridement muscle/fascia first 20 sq cm, 11046 each additional 20 sq cm, 15734 muscle flap trunk, 97605 wound VAC >=50 sq cm
+MODIFIER -22: increased complexity — document time, co-surgeon, blood products, ICU disposition, prior surgeries, hostile field
+
+STRAIGHTFORWARD vs COMPLEX DESIGNATION:
+Straightforward: single discrete stenosis, no CTO, no prior intervention at site, no calcification requiring escalation
+Complex: CTO, subintimal technique, prior failed intervention, heavily calcified requiring lithotripsy, dissection requiring management, bypass occlusion, multiple stents required, hostile field
+
+ASSEMBLY ORDER FOR MULTI-VESSEL CASES:
+1. Opening block
+2. Access documentation
+3. Diagnostic survey TOP-DOWN (aorta to iliac to CFA to profunda to SFA to popliteal to tibial to pedal)
+4. State overall treatment strategy with rationale
+5. Treat inflow BEFORE outflow — document this sequence explicitly
+6. Each intervention: vessel + lesion + decision + rationale + device + result + escalation if needed
+7. Final assessment: inflow confirmed, outflow confirmed, no additional intervention needed, signals improved
+8. Closing block
+
+OUTPUT FORMAT:
+First output the complete Procedure in Detail note as a single flowing narrative paragraph-style text exactly as it would appear in the medical record.
+Then after a divider line (---), output the CPT BILLING SECTION with:
+- A table of applicable CPT codes with code number, description, and brief documentation note
+- Any modifier -22 considerations
+- Any bundling warnings
+- Any documentation gaps the surgeon should address
+
+Keep the note in the surgeon's authentic voice. Do not use bullet points or headers within the note itself. The note should read as natural clinical dictation.`;
+
+// Load saved key
+window.addEventListener('DOMContentLoaded', () => {
+  const k = localStorage.getItem('ant_key');
+  if (k) document.getElementById('apiKey').value = k;
+
+  const c = document.getElementById('chips');
+  PICKS.forEach(p => {
+    const el = document.createElement('span');
+    el.className = 'chip';
+    el.textContent = p;
+    el.onclick = () => document.getElementById('procInput').value = p;
+    c.appendChild(el);
+  });
+});
+
+function saveKey() {
+  const k = document.getElementById('apiKey').value.trim();
+  if (k) { localStorage.setItem('ant_key', k); alert('API key saved.'); }
+}
+
+function getKey() { return document.getElementById('apiKey').value.trim() || localStorage.getItem('ant_key') || ''; }
+
+async function generate() {
+  const proc = document.getElementById('procInput').value.trim();
+  const details = document.getElementById('detailsInput').value.trim();
+  const key = getKey();
+  const errEl = document.getElementById('errMsg');
+  errEl.innerHTML = '';
+
+  if (!key) { errEl.innerHTML = '<p class="error">Please enter your Anthropic API key above.</p>'; return; }
+  if (!proc) { errEl.innerHTML = '<p class="error">Please enter a procedure name.</p>'; return; }
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  document.getElementById('noteBody').innerHTML = '<div class="loading"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span style="font-family:monospace;font-size:11px;color:var(--text-muted)">Drafting note...</span></div>';
+  document.getElementById('cptCard').style.display = 'none';
+
+  const msg = `Please write the Procedure in Detail section for the following operative note:\n\nPROCEDURE(S): ${proc}${details ? '\n\nADDITIONAL DETAILS PROVIDED BY SURGEON: ' + details : ''}\n\nIf specific device sizes are not provided, use clinically appropriate placeholder values in brackets. Generate the complete note followed by the CPT billing section.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4000, system: SYS, messages: [{ role: 'user', content: msg }] })
+    });
+    const data = await res.json();
+    if (data.error) { document.getElementById('noteBody').innerHTML = `<p class="error">API error: ${data.error.message}</p>`; btn.disabled = false; btn.textContent = 'Generate note'; return; }
+    const full = data.content.map(b => b.text || '').join('');
+    const parts = full.split(/\n---+\n/);
+    const note = parts[0]?.trim() || full.trim();
+    const cpt = parts[1]?.trim() || '';
+    document.getElementById('noteBody').innerHTML = `<div class="note-text">${note}</div>`;
+    if (cpt) {
+      document.getElementById('cptCard').style.display = 'block';
+      document.getElementById('cptBody').innerHTML = `<div class="cpt-text">${cpt}</div>`;
+    }
+  } catch(e) {
+    document.getElementById('noteBody').innerHTML = `<p class="error">Error: ${e.message}</p>`;
+  }
+  btn.disabled = false; btn.textContent = 'Generate note';
+}
+
+function clearAll() {
+  document.getElementById('procInput').value = '';
+  document.getElementById('detailsInput').value = '';
+  document.getElementById('noteBody').innerHTML = '<p class="placeholder">Your drafted procedure note will appear here.</p>';
+  document.getElementById('cptCard').style.display = 'none';
+  document.getElementById('errMsg').innerHTML = '';
+}
+
+function copyText(bodyId, btnId) {
+  const el = document.getElementById(bodyId);
+  const text = el.innerText || el.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById(btnId);
+    const orig = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
+}
+</script>
+</body>
+</html>
